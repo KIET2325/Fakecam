@@ -1,116 +1,128 @@
 #import <UIKit/UIKit.h>
 #import <AVFoundation/AVFoundation.h>
 
-@interface FakeCamPickerManager : NSObject <UIImagePickerControllerDelegate, UINavigationControllerDelegate>
+@interface WincareFakeCamManager : NSObject <UIImagePickerControllerDelegate, UINavigationControllerDelegate>
 + (instancetype)sharedInstance;
-@property (nonatomic, strong) UIWindow *overlayWindow; 
-@property (nonatomic, strong) UIImageView *fakeImageView;
-@property (nonatomic, assign) BOOL isPickerPresented;
-- (void)triggerFakeCameraFlow;
+@property (nonatomic, strong) UIWindow *overlayWindow;
+@property (nonatomic, strong) UIImage *selectedImage;
+@property (nonatomic, strong) UIImageView *previewOverlayView; // View đè ảnh fake lên màn hình camera
+@property (nonatomic, assign) BOOL isPickerOpen;
+- (void)showPhotoPicker;
 @end
 
-@implementation FakeCamPickerManager
+@implementation WincareFakeCamManager
 
 + (instancetype)sharedInstance {
-    static FakeCamPickerManager *shared = nil;
+    static WincareFakeCamManager *shared = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        shared = [[FakeCamPickerManager alloc] init];
-        shared.isPickerPresented = NO;
+        shared = [[WincareFakeCamManager alloc] init];
+        shared.isPickerOpen = NO;
     });
     return shared;
 }
 
-- (void)triggerFakeCameraFlow {
+- (void)showPhotoPicker {
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (self.isPickerPresented) return;
+        if (self.isPickerOpen) return;
         
-        UIWindowScene *currentScene = nil;
-        for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
-            if (scene.activationState == UISceneActivationStateForegroundActive && [scene isKindOfClass:[UIWindowScene class]]) {
-                currentScene = (UIWindowScene *)scene;
-                break;
+        UIWindowScene *activeScene = nil;
+        if (@available(iOS 13.0, *)) {
+            for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
+                if (scene.activationState == UISceneActivationStateForegroundActive && [scene isKindOfClass:[UIWindowScene class]]) {
+                    activeScene = (UIWindowScene *)scene;
+                    break;
+                }
             }
         }
-        
-        if (!currentScene) return;
-        
-        self.isPickerPresented = YES;
-        
-        // Tạo cửa sổ độc lập nâng cao hơn lớp hiển thị của Flutter
-        self.overlayWindow = [[UIWindow alloc] initWithWindowScene:currentScene];
-        self.overlayWindow.frame = [UIScreen mainScreen].bounds;
-        self.overlayWindow.windowLevel = UIWindowLevelStatusBar + 1; 
-        self.overlayWindow.backgroundColor = [UIColor blackColor];
+        if (!activeScene) return;
+        self.isPickerOpen = YES;
+
+        if (@available(iOS 13.0, *)) {
+            self.overlayWindow = [[UIWindow alloc] initWithWindowScene:activeScene];
+        } else {
+            self.overlayWindow = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+        }
+        self.overlayWindow.windowLevel = UIWindowLevelStatusBar + 2;
+        self.overlayWindow.backgroundColor = [UIColor clearColor];
         
         UIViewController *rootVC = [[UIViewController alloc] init];
         self.overlayWindow.rootViewController = rootVC;
         [self.overlayWindow makeKeyAndVisible];
-        
-        // Tạo view hứng ảnh hiển thị
-        self.fakeImageView = [[UIImageView alloc] initWithFrame:self.overlayWindow.bounds];
-        self.fakeImageView.contentMode = UIViewContentModeScaleAspectFill;
-        [rootVC.view addSubview:self.fakeImageView];
-        
-        // Mở bộ sưu tập ảnh hệ thống công khai
+
         UIImagePickerController *picker = [[UIImagePickerController alloc] init];
         picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
         picker.delegate = self;
-        picker.allowsEditing = NO;
-        
         [rootVC presentViewController:picker animated:YES completion:nil];
     });
 }
 
-// Xử lý khi chọn ảnh xong trong Album
 - (void)imagePickerController:(UIImagePickerController *)picker didFinishPickingMediaWithInfo:(NSDictionary<UIImagePickerControllerInfoKey,id> *)info {
-    UIImage *selectedImage = info[UIImagePickerControllerOriginalImage];
-    
-    if (selectedImage && self.fakeImageView) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            self.fakeImageView.image = selectedImage; 
-        });
+    UIImage *img = info[UIImagePickerControllerOriginalImage];
+    if (img) {
+        self.selectedImage = img;
+        // Nếu camera đang mở, gán trực tiếp ảnh vào màn hình preview luôn
+        if (self.previewOverlayView) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                self.previewOverlayView.image = img;
+                self.previewOverlayView.hidden = NO;
+            });
+        }
     }
-    [picker dismissViewControllerAnimated:YES completion:nil];
-}
-
-// Xử lý khi bấm nút hủy chọn ảnh
-- (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {
     [picker dismissViewControllerAnimated:YES completion:^{
-        dispatch_async(dispatch_get_main_queue(), ^{
-            self.overlayWindow.hidden = YES;
-            self.overlayWindow = nil;
-            self.isPickerPresented = NO;
-        });
-    }];
-}
-
-- (void)resetFakeCamera {
-    dispatch_async(dispatch_get_main_queue(), ^{
         if (self.overlayWindow) {
             self.overlayWindow.hidden = YES;
             self.overlayWindow = nil;
         }
-        self.isPickerPresented = NO;
+        self.isPickerOpen = NO;
+    });
+}
+
+- (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {
+    [picker dismissViewControllerAnimated:YES completion:^{
+        if (self.overlayWindow) {
+            self.overlayWindow.hidden = YES;
+            self.overlayWindow = nil;
+        }
+        self.isPickerOpen = NO;
     });
 }
 @end
 
-// ==================== HOOK PHIÊN HOẠT ĐỘNG CAMERA ====================
+// ==================== HOOK LỚP HIỂN THỊ CAMERA CỦA FLUTTER ====================
 
-%hook AVCaptureSession
+%hook AVCaptureVideoPreviewLayer
 
-- (void)startRunning {
-    %orig; 
-    // Trễ 0.3 giây đảm bảo giao diện app gốc ổn định trước khi gọi Bộ sưu tập
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        [[FakeCamPickerManager sharedInstance] triggerFakeCameraFlow];
+// Hàm này được gọi khi Flutter bắt đầu vẽ luồng camera lên màn hình điện thoại
+- (void)setSession:(AVCaptureSession *)session {
+    %orig;
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
+        // Tạo một UIImageView đè khít lên khung hình camera vật lý của app
+        if (![WincareFakeCamManager sharedInstance].previewOverlayView) {
+            UIImageView *fakeView = [[UIImageView alloc] initWithFrame:self.bounds];
+            fakeView.contentMode = UIViewContentModeScaleAspectFill;
+            fakeView.clipsToBounds = YES;
+            fakeView.hidden = YES;
+            
+            // Thêm vào lớp cha của layer camera
+            [self.superlayer addSublayer:fakeView.layer]; 
+            // Hoặc lưu ref để gán ảnh
+            [WincareFakeCamManager sharedInstance].previewOverlayView = fakeView;
+        }
+        
+        // Gọi trình chọn ảnh từ Album
+        [[WincareFakeCamManager sharedInstance] showPhotoPicker];
     });
 }
 
-- (void)stopRunning {
+// Đảm bảo kích thước ảnh giả luôn khít với khung camera khi xoay màn hình
+- (void)setBounds:(CGRect)bounds {
     %orig;
-    [[FakeCamPickerManager sharedInstance] resetFakeCamera];
+    if ([WincareFakeCamManager sharedInstance].previewOverlayView) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [WincareFakeCamManager sharedInstance].previewOverlayView.frame = bounds;
+        });
+    }
 }
-
 %end
