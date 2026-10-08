@@ -17,28 +17,19 @@ jobs:
 
       - name: Thiết lập Theos và Môi trường
         run: |
-          # Clone trực tiếp kho lưu trữ Theos và các submodules đi kèm
-          git clone --recursive https://github.com $HOME/theos
-          
-          # Đăng ký biến môi trường THEOS vào hệ thống GitHub Actions
+          git clone --recursive https://github.com/theos/theos.git $HOME/theos
           echo "THEOS=$HOME/theos" >> $GITHUB_ENV
 
       - name: Liên kết iOS SDK từ Xcode
         run: |
-          # Tạo thư mục chứa SDK trong Theos
           mkdir -p $HOME/theos/sdks
-          
-          # Lấy trực tiếp SDK iPhoneOS mặc định của Xcode có sẵn trên máy ảo Mac
-          # và tạo một liên kết (symlink) vào thư mục sdks của Theos
           SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
           ln -s "$SDK_PATH" $HOME/theos/sdks/iPhoneOS.sdk
-          
           echo "Đã liên kết SDK từ đường dẫn: $SDK_PATH"
 
       - name: Tiến hành Biên dịch Tweak
         run: |
           export THEOS=$HOME/theos
-          # Biên dịch Tweak với kiến trúc arm64 và arm64e
           make package FINALPACKAGE=1 SHARED_ARCHS="arm64 arm64e"
 
       - name: Lưu trữ file dylib / deb kết quả
