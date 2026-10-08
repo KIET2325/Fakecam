@@ -1,43 +1,49 @@
-name: Biên dịch Tweak Fake Camera Wincare
+name: Biên dịch Tweak Fake Camera Wincare (macOS)
 
 on:
   push:
     branches: [ "main", "master" ]
   pull_request:
     branches: [ "main", "master" ]
-  workflow_dispatch: # Cho phép bấm nút chạy thủ công trên GitHub
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Chuyển sang sử dụng máy ảo Mac
+    runs-on: macos-latest
 
     steps:
-      - name: Checkout mã nguồn
+      - name: Set up job
         uses: actions/checkout@v4
 
-      - name: Thiết lập môi trường Linux và Theos
+      - name: Thiết lập Theos và Môi trường
         run: |
-          sudo apt-get update
-          sudo apt-get install -y rsync curl git coreutils build-essential checkinstall dynamiclist libsecurity-mac-perlio-perl
+          # Tải và cài đặt Theos chuẩn
           bash -c "$(curl -fsSL https://githubusercontent.com)"
-          echo "THEOS=/home/runner/theos" >> $GITHUB_ENV
+          echo "THEOS=$HOME/theos" >> $GITHUB_ENV
 
-      - name: Tải iOS SDK
+      - name: Liên kết iOS SDK từ Xcode
         run: |
-          # Sửa lỗi đường dẫn có dấu ngã (~) bị lỗi 128 trước đó
-          git clone https://github.com /home/runner/theos/sdks
+          # Tạo thư mục chứa SDK trong Theos
+          mkdir -p $HOME/theos/sdks
+          
+          # Lấy trực tiếp SDK iPhoneOS mặc định của Xcode có sẵn trên máy ảo Mac
+          # và tạo một liên kết (symlink) vào thư mục sdks của Theos
+          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
+          ln -s "$SDK_PATH" $HOME/theos/sdks/iPhoneOS.sdk
+          
+          echo "Đã liên kết SDK từ đường dẫn: $SDK_PATH"
 
       - name: Tiến hành Biên dịch Tweak
         run: |
-          export THEOS=/home/runner/theos
-          export PATH=$THEOS/bin:$PATH
-          make clean
-          make package FINALPACKAGE=1
+          export THEOS=$HOME/theos
+          # Biên dịch Tweak với kiến trúc arm64 và arm64e
+          make package FINALPACKAGE=1 SHARED_ARCHS="arm64 arm64e"
 
       - name: Lưu trữ file dylib / deb kết quả
         uses: actions/artifacts@v4
         with:
-          name: Wincare-FakeCam-Tweak
+          name: Fake-Camera-Wincare-Mac-Output
           path: |
-            .theos/obj/debug/*.dylib
-            packages/*.deb
+            *.deb
+            .theos/obj/*.dylib
