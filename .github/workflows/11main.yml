@@ -9,7 +9,6 @@ on:
 
 jobs:
   build:
-    # Chuyển sang sử dụng máy ảo Mac
     runs-on: macos-latest
 
     steps:
@@ -18,8 +17,10 @@ jobs:
 
       - name: Thiết lập Theos và Môi trường
         run: |
-          # Tải và cài đặt Theos chuẩn
-          bash -c "$(curl -fsSL https://githubusercontent.com)"
+          # Clone trực tiếp kho lưu trữ Theos và các submodules đi kèm
+          git clone --recursive https://github.com $HOME/theos
+          
+          # Đăng ký biến môi trường THEOS vào hệ thống GitHub Actions
           echo "THEOS=$HOME/theos" >> $GITHUB_ENV
 
       - name: Liên kết iOS SDK từ Xcode
