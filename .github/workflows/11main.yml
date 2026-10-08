@@ -1,4 +1,4 @@
-name: Build FakeCam Dylib
+name: Build FakeCam Dylib Fast
 
 on:
   push:
@@ -7,14 +7,16 @@ on:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest # Chuyển sang Linux để không phải xếp hàng chờ máy macOS
 
     steps:
     - name: Checkout mã nguồn
       uses: actions/checkout@v4
 
-    - name: Thiết lập môi trường Theos
+    - name: Thiết lập môi trường Linux và Theos
       run: |
+        sudo apt-get update
+        sudo apt-get install -y clang build-essential git perl libssl-dev
         bash -c "$(curl -fsSL https://githubusercontent.com)"
         echo "THEOS=~/theos" >> $GITHUB_ENV
         
@@ -22,7 +24,7 @@ jobs:
       run: |
         git clone https://github.com ~/theos/sdks
         
-    - name: Tiến hành Biên dịch Tweak
+    - name: Tiến hành Biên dịch Tweak Chống Văng
       run: |
         export THEOS=~/theos
         make package FINALPACKAGE=1
