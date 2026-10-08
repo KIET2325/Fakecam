@@ -5,39 +5,41 @@ on:
     branches: [ "main", "master" ]
   pull_request:
     branches: [ "main", "master" ]
-  workflow_dispatch: 
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout mã nguồn
+      - name: Set up job
         uses: actions/checkout@v4
 
       - name: Thiết lập môi trường Linux và Theos
         run: |
           sudo apt-get update
-          # Đã loại bỏ gói dynamiclist và libsecurity-mac-perlio-perl để sửa lỗi exit code 100
-          sudo apt-get install -y rsync curl git coreutils build-essential checkinstall
+          sudo apt-get install -y fakeroot git make curl build-essential libssl-dev standard-version unzip
           bash -c "$(curl -fsSL https://githubusercontent.com)"
           echo "THEOS=/home/runner/theos" >> $GITHUB_ENV
 
       - name: Tải iOS SDK
         run: |
-          git clone https://github.com /home/runner/theos/sdks
+          mkdir -p /home/runner/theos/sdks
+          # Tải SDK iOS 14.5 chuẩn cho Theos (bạn có thể đổi sang bản khác nếu cần)
+          curl -LO https://github.com
+          tar -xf iPhoneOS14.5.sdk.tar.xz -C /home/runner/theos/sdks/
+          rm iPhoneOS14.5.sdk.tar.xz
 
       - name: Tiến hành Biên dịch Tweak
         run: |
           export THEOS=/home/runner/theos
-          export PATH=$THEOS/bin:$PATH
-          make clean
-          make package FINALPACKAGE=1
+          # Lệnh make sẽ tự động build ra cả file .deb và file .dylib trong thư mục .theos/obj/
+          make package FINALPACKAGE=1 SHARED_ARCHS="arm64 arm64e"
 
       - name: Lưu trữ file dylib / deb kết quả
-        uses: actions/upload-artifact@v4
+        uses: actions/artifacts@v4
         with:
-          name: Wincare-FakeCam-Tweak
+          name: Fake-Camera-Wincare-Output
           path: |
-            .theos/obj/debug/*.dylib
-            packages/*.deb
+            *.deb
+            .theos/obj/*.dylib
