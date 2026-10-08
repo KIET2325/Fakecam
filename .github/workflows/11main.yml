@@ -1,36 +1,43 @@
-name: Build FakeCam Dylib Fast
+name: Biên dịch Tweak Fake Camera Wincare
 
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch: # Cho phép bấm nút chạy thủ công trên GitHub
 
 jobs:
   build:
-    runs-on: ubuntu-latest # Chuyển sang Linux để không phải xếp hàng chờ máy macOS
+    runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout mã nguồn
-      uses: actions/checkout@v4
+      - name: Checkout mã nguồn
+        uses: actions/checkout@v4
 
-    - name: Thiết lập môi trường Linux và Theos
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y clang build-essential git perl libssl-dev
-        bash -c "$(curl -fsSL https://githubusercontent.com)"
-        echo "THEOS=~/theos" >> $GITHUB_ENV
-        
-    - name: Tải iOS SDK
-      run: |
-        git clone https://github.com ~/theos/sdks
-        
-    - name: Tiến hành Biên dịch Tweak Chống Văng
-      run: |
-        export THEOS=~/theos
-        make package FINALPACKAGE=1
-        
-    - name: Lưu trữ file dylib kết quả
-      uses: actions/upload-artifact@v4
-      with:
-        name: libfakecampicker-dylib
-        path: .theos/obj/debug/libfakecampicker.dylib
+      - name: Thiết lập môi trường Linux và Theos
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rsync curl git coreutils build-essential checkinstall dynamiclist libsecurity-mac-perlio-perl
+          bash -c "$(curl -fsSL https://githubusercontent.com)"
+          echo "THEOS=/home/runner/theos" >> $GITHUB_ENV
+
+      - name: Tải iOS SDK
+        run: |
+          # Sửa lỗi đường dẫn có dấu ngã (~) bị lỗi 128 trước đó
+          git clone https://github.com /home/runner/theos/sdks
+
+      - name: Tiến hành Biên dịch Tweak
+        run: |
+          export THEOS=/home/runner/theos
+          export PATH=$THEOS/bin:$PATH
+          make clean
+          make package FINALPACKAGE=1
+
+      - name: Lưu trữ file dylib / deb kết quả
+        uses: actions/artifacts@v4
+        with:
+          name: Wincare-FakeCam-Tweak
+          path: |
+            .theos/obj/debug/*.dylib
+            packages/*.deb
