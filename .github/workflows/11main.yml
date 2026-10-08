@@ -17,14 +17,14 @@ jobs:
 
       - name: Thiết lập Theos và Môi trường
         run: |
-          git clone --recursive https://github.com/theos/theos.git $HOME/theos
+          git clone --recursive https://github.com $HOME/theos
           echo "THEOS=$HOME/theos" >> $GITHUB_ENV
 
       - name: Cài đặt công cụ ký số ldid
         run: |
           # Cài đặt ldid từ Homebrew để xử lý lỗi Signing ldid: command not found
           brew install ldid
-          
+        
       - name: Liên kết iOS SDK từ Xcode
         run: |
           mkdir -p $HOME/theos/sdks
@@ -35,12 +35,22 @@ jobs:
       - name: Tiến hành Biên dịch Tweak
         run: |
           export THEOS=$HOME/theos
-          make package FINALPACKAGE=1 SHARED_ARCHS="arm64 arm64e"
+          # Ép chọn chính xác file cấu hình để tránh lỗi nhận diện
+          make -f Makefile package FINALPACKAGE=1 SHARED_ARCHS="arm64 arm64e"
+
+      - name: Kiểm tra vị trí file sản phẩm thực tế (Debug)
+        run: |
+          echo "=== Danh sách file .deb tìm thấy ==="
+          find . -name "*.deb"
+          echo "=== Danh sách file .dylib tìm thấy ==="
+          find . -name "*.dylib"
 
       - name: Lưu trữ file dylib / deb kết quả
         uses: actions/upload-artifact@v4
         with:
           name: Fake-Camera-Wincare-Mac-Output
           path: |
-            *.deb
+            packages/*.deb
+            .theos/obj/**/*.dylib
             .theos/obj/*.dylib
+            **/*.dylib
