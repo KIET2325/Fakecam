@@ -257,11 +257,17 @@ didFinishPickingMediaWithInfo:(NSDictionary<NSString *,id> *)info {
 %end
 
 %hook AVCaptureStillImageOutput
-- (void)captureStillImageAsynchronouslyFromConnection:(id)conn completionHandler:(void (^)(CMSampleBufferRef, NSError *))h {
-    if (!h) { %orig; return; }
+- (void)captureStillImageAsynchronouslyFromConnection:(id)conn 
+    completionHandler:(void (^)(CMSampleBufferRef, NSError *))h {
+    if (!h) {
+        %orig(conn, h);
+        return;
+    }
     
-    void (^customH)(CMSampleBufferRef, NSError *) = ^(CMSampleBufferRef sBuf, NSError *err) {
-        CMSampleBufferRef fake = [[WincareFakeCamManager sharedInstance] createFakeBuffer];
+    void (^customH)(CMSampleBufferRef, NSError *) = 
+    ^(CMSampleBufferRef sBuf, NSError *err) {
+        CMSampleBufferRef fake = 
+            [[WincareFakeCamManager sharedInstance] createFakeBuffer];
         if (fake) {
             h(fake, err);
             CFRelease(fake);
@@ -269,6 +275,7 @@ didFinishPickingMediaWithInfo:(NSDictionary<NSString *,id> *)info {
             h(sBuf, err);
         }
     };
+    
     %orig(conn, customH);
 }
 %end
