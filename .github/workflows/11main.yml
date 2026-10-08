@@ -41,7 +41,7 @@ jobs:
           make package FINALPACKAGE=1 SHARED_ARCHS="arm64 arm64e"
 
       - name: Lưu trữ file dylib / deb kết quả
-        uses: actions/artifacts@v4
+        uses: actions/upload-artifact@v4
         with:
           name: Fake-Camera-Wincare-Mac-Output
           path: |
