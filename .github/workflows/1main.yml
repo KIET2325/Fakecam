@@ -1,0 +1,47 @@
+name: Build Dylib
+on: [workflow_dispatch] # Kích hoạt bằng nút nhấn thủ công
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create Entitlements File
+        run: |
+          cat <<EOF > entitlements.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://apple.com">
+          <plist version="1.0">
+          <dict>
+              <key>com.apple.security.cs.disable-library-validation</key>
+              <true/>
+              <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+              <true/>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Compile Dylib for iOS 18
+        run: |
+          clang -dynamiclib \
+            -framework UIKit \
+            -framework Foundation \
+            -framework AVFoundation \
+            -framework CoreMedia \
+            -framework CoreVideo \
+            -arch arm64 -arch arm64e \
+            -miphoneos-version-min=14.0 \
+            -isysroot $(xcrun --sdk iphoneos --show-sdk-path) \
+            fakecam.m -o libfakecam.dylib
+
+      - name: Codesign Dylib (Ad-hoc)
+        run: |
+          codesign --force --sign - --entitlements entitlements.plist libfakecam.dylib
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FakeCam-Dylib
+          path: libfakecam.dylib
