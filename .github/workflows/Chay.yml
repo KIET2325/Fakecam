@@ -18,7 +18,8 @@ jobs:
       - name: Thiết lập môi trường Linux và Theos
         run: |
           sudo apt-get update
-          sudo apt-get install -y rsync curl git coreutils build-essential checkinstall dynamiclist libsecurity-mac-perlio-perl
+          # Đã loại bỏ gói dynamiclist và libsecurity-mac-perlio-perl để sửa lỗi exit code 100
+          sudo apt-get install -y rsync curl git coreutils build-essential checkinstall
           bash -c "$(curl -fsSL https://githubusercontent.com)"
           echo "THEOS=/home/runner/theos" >> $GITHUB_ENV
 
