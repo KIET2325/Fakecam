@@ -2,12 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://apple.com">
 <plist version="1.0">
 <dict>
-    <key>Filter</key>
-    <dict>
-        <key>Frameworks</key>
-        <array>
-            <string>AVFoundation</string>
-        </array>
-    </dict>
+	<key>Filter</key>
+	<dict>
+		<key>Bundles</key>
+		<array>
+			<string>vn.masangroup.wincare</string>
+		</array>
+	</dict>
 </dict>
 </plist>
