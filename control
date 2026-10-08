@@ -1,0 +1,9 @@
+Package: vn.masangroup.wincare.fakecampicker
+Name: Fake Camera Wincare
+Depends: mobilesubstrate
+Version: 1.0.0
+Architecture: iphoneos-arm
+Description: Tweak thay đổi luồng camera vật lý bằng hình ảnh chọn từ thư viện cho ứng dụng Wincare.
+Maintainer: KIET2325
+Author: KIET2325
+Section: Tweaks
