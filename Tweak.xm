@@ -69,23 +69,25 @@
             });
         }
     }
+    // SỬA TẠI ĐÂY: Thay thế }); bằng }]; để đóng hàm đóng cửa sổ chọn ảnh
     [picker dismissViewControllerAnimated:YES completion:^{
         if (self.overlayWindow) {
             self.overlayWindow.hidden = YES;
             self.overlayWindow = nil;
         }
         self.isPickerOpen = NO;
-    });
+    }];
 }
 
 - (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {
+    // SỬA TẠI ĐÂY: Thay thế }); bằng }]; để đóng hàm đóng cửa sổ chọn ảnh
     [picker dismissViewControllerAnimated:YES completion:^{
         if (self.overlayWindow) {
             self.overlayWindow.hidden = YES;
             self.overlayWindow = nil;
         }
         self.isPickerOpen = NO;
-    });
+    }];
 }
 @end
 
