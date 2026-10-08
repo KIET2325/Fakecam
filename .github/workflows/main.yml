@@ -1,0 +1,19 @@
+name: Build Dylib
+on: [workflow_dispatch] # Kích hoạt bằng nút nhấn thủ công
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Compile Dylib for iOS 18
+        run: |
+          clang -dynamiclib -framework UIKit -framework Foundation -arch arm64 -isysroot $(xcrun --sdk iphoneos --show-sdk-path) fakecam.m -o libfakecam.dylib
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FakeCam-Dylib
+          path: libfakecam.dylib
