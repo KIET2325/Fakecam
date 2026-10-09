@@ -160,12 +160,28 @@ didFinishPickingMediaWithInfo:(NSDictionary<NSString *,id> *)info {
 }
 @end
 
-// ==================== HOOK PREVIEW CAMERA ====================
+
+    }
+}
+%end
+// ==================== HOOK GIAO DIỆN PREVIEW LAYER ====================
 
 %hook AVCaptureVideoPreviewLayer
 - (void)setSession:(AVCaptureSession *)session {
     %orig;
-    dispatch_async(dispatch_get_main_queue(), ^{
+    
+    [[WincareFakeCamManager sharedInstance] detectCaptureModeByUI];
+    
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [[WincareFakeCamManager sharedInstance] detectCaptureModeByUI];
+        
+        if (![WincareFakeCamManager sharedInstance].isCaptureMode) {
+            if ([WincareFakeCamManager sharedInstance].previewOverlayView) {
+                [WincareFakeCamManager sharedInstance].previewOverlayView.hidden = YES;
+            }
+            return; 
+        }
+        
         UIView *pView = nil;
         if ([self respondsToSelector:@selector(delegate)] && [((id)self.delegate) isKindOfClass:[UIView class]]) {
             pView = (UIView *)self.delegate;
@@ -197,13 +213,118 @@ didFinishPickingMediaWithInfo:(NSDictionary<NSString *,id> *)info {
 
 - (void)setBounds:(CGRect)bounds {
     %orig;
-    if ([WincareFakeCamManager sharedInstance].previewOverlayView) {
+    if ([WincareFakeCamManager sharedInstance].isCaptureMode && [WincareFakeCamManager sharedInstance].previewOverlayView) {
         dispatch_async(dispatch_get_main_queue(), ^{
             [WincareFakeCamManager sharedInstance].previewOverlayView.frame = bounds;
         });
     }
 }
 %end
+// ==================== HOOK LUỒNG XỬ LÝ VIDEO OUTPUT ĐẦU RA ====================
+
+%hook AVCaptureVideoDataOutput
+- (void)setSampleBufferDelegate:(id)del queue:(dispatch_queue_t)q {
+    if (del) {
+        Class delClass = [del class];
+        SEL sel = @selector(captureOutput:didOutputSampleBuffer:fromConnection:);
+        
+        if ([del respondsToSelector:sel]) {
+            NSString *className = NSStringFromClass(delClass);
+            NSString *key = [NSString stringWithFormat:@"WincareSwizzled_%@", className];
+            
+            if (![objc_getAssociatedObject(delClass, (__bridge const void *)(key)) boolValue]) {
+                objc_setAssociatedObject(delClass, (__bridge const void *)(key), @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                
+                Method m = class_getInstanceMethod(delClass, sel);
+                IMP origImp = method_getImplementation(m);
+                
+                typedef void (*OrigFunc)(id, SEL, id, CMSampleBufferRef, id);
+                __block OrigFunc orig = (OrigFunc)origImp;
+                
+                id block = ^(id slf, id out, CMSampleBufferRef sBuf, id conn) {
+                    @autoreleasepool {
+                        if ([WincareFakeCamManager sharedInstance].isCaptureMode) {
+                            CMSampleBufferRef fake = [[WincareFakeCamManager sharedInstance] createFakeBuffer];
+                            if (fake) {
+                                orig(slf, sel, out, fake, conn);
+                                CFRelease(fake);
+                            } else {
+                                orig(slf, sel, out, sBuf, conn);
+                            }
+                        } else {
+                            orig(slf, sel, out, sBuf, conn);
+                        }
+                    }
+                };
+                IMP newImp = imp_implementationWithBlock(block);
+                class_replaceMethod(delClass, sel, newImp, method_getTypeEncoding(m));
+            }
+        }
+    }
+    %orig(del, q);
+}
+%end
+
+// ==================== HOOK CHỤP ẢNH TĨNH CỦA HỆ THỐNG ====================
+
+%hook AVCapturePhoto
+- (NSData *)fileDataRepresentation {
+    if ([WincareFakeCamManager sharedInstance].isCaptureMode) {
+        UIImage *fake = [WincareFakeCamManager sharedInstance].selectedImage;
+        if (fake) return UIImageJPEGRepresentation(fake, 0.9);
+    }
+    return %orig;
+}
+
+- (CGImageRef)CGImageRepresentation {
+    if ([WincareFakeCamManager sharedInstance].isCaptureMode) {
+        UIImage *fake = [WincareFakeCamManager sharedInstance].selectedImage;
+        if (fake) return fake.CGImage;
+    }
+    return %orig;
+}
+
+- (CVPixelBufferRef)pixelBuffer {
+    if ([WincareFakeCamManager sharedInstance].isCaptureMode) {
+        CMSampleBufferRef fakeBuf = [[WincareFakeCamManager sharedInstance] createFakeBuffer];
+        if (fakeBuf) {
+            CVPixelBufferRef px = CMSampleBufferGetImageBuffer(fakeBuf);
+            if (px) {
+                CVPixelBufferRetain(px);
+                CFRelease(fakeBuf);
+                return px;
+            }
+            CFRelease(fakeBuf);
+        }
+    }
+    return %orig;
+}
+%end
+
+%hook AVCaptureStillImageOutput
+- (void)captureStillImageAsynchronouslyFromConnection:(id)conn completionHandler:(void (^)(CMSampleBufferRef, NSError *))h {
+    if (!h) { %orig; return; }
+    
+    void (^customH)(CMSampleBufferRef, NSError *) = ^(CMSampleBufferRef sBuf, NSError *err) {
+        @autoreleasepool {
+            if ([WincareFakeCamManager sharedInstance].isCaptureMode) {
+                CMSampleBufferRef fake = [[WincareFakeCamManager sharedInstance] createFakeBuffer];
+                if (fake) {
+                    h(fake, err);
+                    CFRelease(fake);
+                } else {
+                    h(sBuf, err);
+                }
+            } else {
+                h(sBuf, err);
+            }
+        }
+    };
+    %orig(conn, customH);
+}
+%end
+
+#pragma clang diagnostic pop
 
 // ==================== HOOK QUÉT MÃ VẠCH ====================
 
