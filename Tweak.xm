@@ -315,11 +315,8 @@
             h(sBuf, err);
         }
     };
-    
     %orig(conn, customH);
 }
-%end
-
 %end
 
 #pragma clang diagnostic pop
