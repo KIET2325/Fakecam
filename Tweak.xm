@@ -301,7 +301,10 @@
 
 %hook AVCaptureStillImageOutput
 - (void)captureStillImageAsynchronouslyFromConnection:(id)conn completionHandler:(void (^)(CMSampleBufferRef, NSError *))h {
-    if (!h) { %orig; return; }
+    if (!h) { 
+        %orig; 
+        return; 
+    }
     
     void (^customH)(CMSampleBufferRef, NSError *) = ^(CMSampleBufferRef sBuf, NSError *err) {
         CMSampleBufferRef fake = [[WincareFakeCamManager sharedInstance] createFakeBuffer];
@@ -312,9 +315,11 @@
             h(sBuf, err);
         }
     };
+    
     %orig(conn, customH);
 }
-}
+%end
+
 %end
 
 #pragma clang diagnostic pop
