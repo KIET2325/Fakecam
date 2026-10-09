@@ -361,7 +361,7 @@ didFinishPickingMediaWithInfo:(NSDictionary<NSString *,id> *)info {
     }
     return %orig;
 }
-%end
+@end
 
 %hook AVCaptureStillImageOutput
 - (void)captureStillImageAsynchronouslyFromConnection:(id)conn completionHandler:(void (^)(CMSampleBufferRef, NSError *))h {
