@@ -1,12 +1,11 @@
-TARGET := iphone:clang:latest:14.0
-ARCHS := arm64 arm64e
+TARGET := iphone:clang:latest:15.0
+ARCHS = arm64 arm64e
 
 include $(THEOS)/makefiles/common.mk
 
-TWEAK_NAME = libfakecampicker
+TWEAK_NAME = WINCAREFakeCam
 
-libfakecampicker_FILES = Tweak.xm
-# Cập nhật lại danh sách Frameworks chuẩn cho mã nguồn mới
-libfakecampicker_FRAMEWORKS = UIKit AVFoundation CoreGraphics Foundation
+WINCAREFakeCam_FILES = Tweak.x
+WINCAREFakeCam_FRAMEWORKS = UIKit AVFoundation CoreMedia
 
-include $(THEOS_MAKE_PATH)/tweak.mk
+include $(THEOS)/makefiles/tweak.mk
