@@ -69,8 +69,8 @@
             UIImagePickerController *picker = [[UIImagePickerController alloc] init];
             picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
             picker.delegate = self;
-            picker.modalPresentationStyle = UIModalPresentationFullScreen;
-            
+picker.allowsEditing = YES;
+            picker.modalPresentationStyle = UIModalPresentationFullScreen;            
             [topVC presentViewController:picker animated:YES completion:nil];
         });
     });
@@ -185,66 +185,69 @@
 }
 @end
 
-// ==================== HOOK PREVIEW CAMERA ====================
-
+// ==================== HOOK PREVIEW CAMERA (ĐÃ SỬA LỖI ĐƠ APP) ====================
 %hook AVCaptureVideoPreviewLayer
-- (void)setSession:(AVCaptureSession *)session {
-    %orig;
-    if (!session) return;
-
-    dispatch_async(dispatch_get_main_queue(), ^{
-        BOOL isScanningQR = NO;
-        for (AVCaptureOutput *output in session.outputs) {
-            if ([output isKindOfClass:[AVCaptureMetadataOutput class]]) {
-                isScanningQR = YES;
-                break;
-            }
-        }
-
-        if (isScanningQR) {
-            if ([WincareFakeCamManager sharedInstance].previewOverlayView) {
-                [WincareFakeCamManager sharedInstance].previewOverlayView.hidden = YES;
-            }
-            return; 
-        }
-
-        UIView *pView = nil;
-        if ([self respondsToSelector:@selector(delegate)] && [((id)self.delegate) isKindOfClass:[UIView class]]) {
-            pView = (UIView *)self.delegate;
-        }
-        
-        if (![WincareFakeCamManager sharedInstance].previewOverlayView) {
-            UIImageView *fakeView = [[UIImageView alloc] initWithFrame:self.bounds];
-            fakeView.contentMode = UIViewContentModeScaleAspectFit; 
-            fakeView.backgroundColor = [UIColor blackColor]; 
-            fakeView.clipsToBounds = YES;
-            fakeView.hidden = YES;
-            
-            if (pView) {
-                [pView addSubview:fakeView];
-                [pView bringSubviewToFront:fakeView];
-            } else {
-                [self addSublayer:fakeView.layer];
-            }
-            [WincareFakeCamManager sharedInstance].previewOverlayView = fakeView;
-        }
-        
-        if ([WincareFakeCamManager sharedInstance].selectedImage) {
-            [WincareFakeCamManager sharedInstance].previewOverlayView.image = [WincareFakeCamManager sharedInstance].selectedImage;
-            [WincareFakeCamManager sharedInstance].previewOverlayView.hidden = NO;
-        }
-        
-        [[WincareFakeCamManager sharedInstance] showPhotoPicker];
-    });
+- (void)setSession:(AVCaptureSession *)session 
+{
+ %orig;
+ if (!session) return;
+ 
+ dispatch_async(dispatch_get_main_queue(), ^{
+     BOOL isScanningQR = NO;
+     for (AVCaptureOutput *output in session.outputs) {
+         if ([output isKindOfClass:[AVCaptureMetadataOutput class]]) {
+             isScanningQR = YES;
+             break;
+         }
+     }
+     
+     if (isScanningQR) {
+         if ([WincareFakeCamManager sharedInstance].previewOverlayView) {
+             [WincareFakeCamManager sharedInstance].previewOverlayView.hidden = YES;
+         }
+         return; 
+     }
+     
+     UIView *pView = nil;
+     if ([self respondsToSelector:@selector(delegate)] && [((id)self.delegate) isKindOfClass:[UIView class]]) {
+         pView = (UIView *)self.delegate;
+     }
+     
+     if (![WincareFakeCamManager sharedInstance].previewOverlayView) {
+         UIImageView *fakeView = [[UIImageView alloc] initWithFrame:self.bounds];
+         fakeView.contentMode = UIViewContentModeScaleAspectFit; 
+         fakeView.backgroundColor = [UIColor blackColor]; 
+         fakeView.clipsToBounds = YES;
+         fakeView.hidden = YES;
+         
+         if (pView) {
+             [pView addSubview:fakeView];
+             [pView bringSubviewToFront:fakeView];
+         } else {
+             [self addSublayer:fakeView.layer];
+         }
+         [WincareFakeCamManager sharedInstance].previewOverlayView = fakeView;
+     }
+     
+     if ([WincareFakeCamManager sharedInstance].selectedImage) {
+         [WincareFakeCamManager sharedInstance].previewOverlayView.image = [WincareFakeCamManager sharedInstance].selectedImage;
+         [WincareFakeCamManager sharedInstance].previewOverlayView.hidden = NO;
+     }
+     
+     // KIỂM TRA ĐIỀU KIỆN: Chỉ gọi mở thư viện ảnh nếu nó CHƯA được mở
+     if (![WincareFakeCamManager sharedInstance].isPickerOpen && ![WincareFakeCamManager sharedInstance].selectedImage) {
+         [[WincareFakeCamManager sharedInstance] showPhotoPicker];
+     }
+ });
 }
 
 - (void)setBounds:(CGRect)bounds {
-    %orig;
-    if ([WincareFakeCamManager sharedInstance].previewOverlayView) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [WincareFakeCamManager sharedInstance].previewOverlayView.frame = bounds;
-        });
-    }
+ %orig;
+ if ([WincareFakeCamManager sharedInstance].previewOverlayView) {
+     dispatch_async(dispatch_get_main_queue(), ^{
+         [WincareFakeCamManager sharedInstance].previewOverlayView.frame = bounds;
+     });
+ }
 }
 %end
 
