@@ -5,7 +5,7 @@ include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = WINCAREFakeCam
 
-WINCAREFakeCam_FILES = Tweak.x
+WINCAREFakeCam_FILES = Tweak.xm
 WINCAREFakeCam_FRAMEWORKS = UIKit AVFoundation CoreMedia
 
 include $(THEOS)/makefiles/tweak.mk
