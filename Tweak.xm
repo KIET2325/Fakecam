@@ -14,7 +14,6 @@
 @property (nonatomic, assign) BOOL isPickerOpen;
 - (void)showPhotoPicker;
 - (CMSampleBufferRef)createFakeBuffer;
-- (void)triggerCaptureButtonIfNeeded;
 @end
 
 @implementation WincareFakeCamManager
@@ -45,39 +44,8 @@
 - (void)showPhotoPicker {
     dispatch_async(dispatch_get_main_queue(), ^{
         if (self.isPickerOpen) return;
+        self.isPickerOpen = YES;
         
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            if (self.isPickerOpen) return;
-            
-            UIWindow *keyWindow = nil;
-            if (@available(iOS 13.0, *)) {
-                for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
-                    if (scene.activationState == UISceneActivationStateForegroundActive && [scene isKindOfClass:[UIWindowScene class]]) {
-                        for (UIWindow *window in ((UIWindowScene *)scene).windows) {
-                            if (window.isKeyWindow) { keyWindow = window; break; }
-                        }
-                    }
-                    if (keyWindow) break;
-                }
-            }
-            if (!keyWindow) keyWindow = [UIApplication sharedApplication].keyWindow;
-            
-            UIViewController *topVC = [self topViewControllerWithRootVC:keyWindow.rootViewController];
-            if (!topVC) return;
-            
-            self.isPickerOpen = YES;
-            UIImagePickerController *picker = [[UIImagePickerController alloc] init];
-            picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
-            picker.delegate = self;
-picker.allowsEditing = YES;
-            picker.modalPresentationStyle = UIModalPresentationFullScreen;            
-            [topVC presentViewController:picker animated:YES completion:nil];
-        });
-    });
-}
-
-- (void)triggerCaptureButtonIfNeeded {
-    dispatch_async(dispatch_get_main_queue(), ^{
         UIWindow *keyWindow = nil;
         if (@available(iOS 13.0, *)) {
             for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
@@ -86,33 +54,32 @@ picker.allowsEditing = YES;
                         if (window.isKeyWindow) { keyWindow = window; break; }
                     }
                 }
+                if (keyWindow) break;
             }
         }
         if (!keyWindow) keyWindow = [UIApplication sharedApplication].keyWindow;
         
-        [self findAndClickButtonInView:keyWindow];
+        UIViewController *topVC = [self topViewControllerWithRootVC:keyWindow.rootViewController];
+        if (!topVC) {
+            self.isPickerOpen = NO;
+            return;
+        }
+        
+        UIImagePickerController *picker = [[UIImagePickerController alloc] init];
+        picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
+        picker.delegate = self;
+        picker.allowsEditing = YES;
+        picker.modalPresentationStyle = UIModalPresentationFullScreen;
+        
+        [topVC presentViewController:picker animated:YES completion:nil];
     });
 }
-
-- (BOOL)findAndClickButtonInView:(UIView *)view {
-    if ([view isKindOfClass:[UIButton class]]) {
-        UIButton *btn = (UIButton *)view;
-        if (btn.userInteractionEnabled && !btn.hidden && btn.alpha > 0.1) {
-            [btn sendActionsForControlEvents:UIControlEventTouchUpInside];
-            return YES;
-        }
+- (void)imagePickerController:(UIImagePickerController *)picker didFinishPickingMediaWithInfo:(NSDictionary<NSString *,id> *)info {
+    UIImage *img = info[UIImagePickerControllerEditedImage];
+    if (!img) {
+        img = info[UIImagePickerControllerOriginalImage];
     }
     
-    for (UIView *subview in view.subviews) {
-        if ([self findAndClickButtonInView:subview]) {
-            return YES;
-        }
-    }
-    return NO;
-}
-
-- (void)imagePickerController:(UIImagePickerController *)picker didFinishPickingMediaWithInfo:(NSDictionary<NSString *,id> *)info {
-    UIImage *img = info[UIImagePickerControllerOriginalImage];
     if (img) {
         if (img.imageOrientation != UIImageOrientationUp) {
             UIGraphicsBeginImageContextWithOptions(img.size, NO, img.scale);
@@ -134,9 +101,6 @@ picker.allowsEditing = YES;
     
     [picker dismissViewControllerAnimated:YES completion:^{
         self.isPickerOpen = NO;
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            [self triggerCaptureButtonIfNeeded];
-        });
     }];
 }
 
@@ -176,7 +140,6 @@ picker.allowsEditing = YES;
     
     CMSampleTimingInfo tInfo = kCMTimingInfoInvalid;
     CMSampleBufferRef sBuf = NULL;
-    
     CMSampleBufferCreateForImageBuffer(kCFAllocatorDefault, pxBuf, YES, NULL, NULL, vInfo, &tInfo, &sBuf);
     
     CVPixelBufferRelease(pxBuf);
@@ -185,74 +148,70 @@ picker.allowsEditing = YES;
 }
 @end
 
-// ==================== HOOK PREVIEW CAMERA (ĐÃ SỬA LỖI ĐƠ APP) ====================
+// ==================== HOOK PREVIEW CAMERA ====================
 %hook AVCaptureVideoPreviewLayer
-- (void)setSession:(AVCaptureSession *)session 
-{
- %orig;
- if (!session) return;
- 
- dispatch_async(dispatch_get_main_queue(), ^{
-     BOOL isScanningQR = NO;
-     for (AVCaptureOutput *output in session.outputs) {
-         if ([output isKindOfClass:[AVCaptureMetadataOutput class]]) {
-             isScanningQR = YES;
-             break;
-         }
-     }
-     
-     if (isScanningQR) {
-         if ([WincareFakeCamManager sharedInstance].previewOverlayView) {
-             [WincareFakeCamManager sharedInstance].previewOverlayView.hidden = YES;
-         }
-         return; 
-     }
-     
-     UIView *pView = nil;
-     if ([self respondsToSelector:@selector(delegate)] && [((id)self.delegate) isKindOfClass:[UIView class]]) {
-         pView = (UIView *)self.delegate;
-     }
-     
-     if (![WincareFakeCamManager sharedInstance].previewOverlayView) {
-         UIImageView *fakeView = [[UIImageView alloc] initWithFrame:self.bounds];
-         fakeView.contentMode = UIViewContentModeScaleAspectFit; 
-         fakeView.backgroundColor = [UIColor blackColor]; 
-         fakeView.clipsToBounds = YES;
-         fakeView.hidden = YES;
-         
-         if (pView) {
-             [pView addSubview:fakeView];
-             [pView bringSubviewToFront:fakeView];
-         } else {
-             [self addSublayer:fakeView.layer];
-         }
-         [WincareFakeCamManager sharedInstance].previewOverlayView = fakeView;
-     }
-     
-     if ([WincareFakeCamManager sharedInstance].selectedImage) {
-         [WincareFakeCamManager sharedInstance].previewOverlayView.image = [WincareFakeCamManager sharedInstance].selectedImage;
-         [WincareFakeCamManager sharedInstance].previewOverlayView.hidden = NO;
-     }
-     
-     // KIỂM TRA ĐIỀU KIỆN: Chỉ gọi mở thư viện ảnh nếu nó CHƯA được mở
-     if (![WincareFakeCamManager sharedInstance].isPickerOpen && ![WincareFakeCamManager sharedInstance].selectedImage) {
-         [[WincareFakeCamManager sharedInstance] showPhotoPicker];
-     }
- });
+- (void)setSession:(AVCaptureSession *)session {
+    %orig;
+    if (!session) return;
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
+        BOOL isScanningQR = NO;
+        for (AVCaptureOutput *output in session.outputs) {
+            if ([output isKindOfClass:[AVCaptureMetadataOutput class]]) {
+                isScanningQR = YES;
+                break;
+            }
+        }
+        if (isScanningQR) {
+            if ([WincareFakeCamManager sharedInstance].previewOverlayView) {
+                [WincareFakeCamManager sharedInstance].previewOverlayView.hidden = YES;
+            }
+            return; 
+        }
+        
+        UIView *pView = nil;
+        if ([self respondsToSelector:@selector(delegate)] && [((id)self.delegate) isKindOfClass:[UIView class]]) {
+            pView = (UIView *)self.delegate;
+        }
+        
+        if (![WincareFakeCamManager sharedInstance].previewOverlayView) {
+            UIImageView *fakeView = [[UIImageView alloc] initWithFrame:self.bounds];
+            fakeView.contentMode = UIViewContentModeScaleAspectFit; 
+            fakeView.backgroundColor = [UIColor blackColor]; 
+            fakeView.clipsToBounds = YES;
+            fakeView.hidden = YES;
+            
+            if (pView) {
+                [pView addSubview:fakeView];
+                [pView bringSubviewToFront:fakeView];
+            } else {
+                [self addSublayer:fakeView.layer];
+            }
+            [WincareFakeCamManager sharedInstance].previewOverlayView = fakeView;
+        }
+        
+        if ([WincareFakeCamManager sharedInstance].selectedImage) {
+            [WincareFakeCamManager sharedInstance].previewOverlayView.image = [WincareFakeCamManager sharedInstance].selectedImage;
+            [WincareFakeCamManager sharedInstance].previewOverlayView.hidden = NO;
+        }
+        
+        if (![WincareFakeCamManager sharedInstance].isPickerOpen && ![WincareFakeCamManager sharedInstance].selectedImage) {
+            [[WincareFakeCamManager sharedInstance] showPhotoPicker];
+        }
+    });
 }
 
 - (void)setBounds:(CGRect)bounds {
- %orig;
- if ([WincareFakeCamManager sharedInstance].previewOverlayView) {
-     dispatch_async(dispatch_get_main_queue(), ^{
-         [WincareFakeCamManager sharedInstance].previewOverlayView.frame = bounds;
-     });
- }
+    %orig;
+    if ([WincareFakeCamManager sharedInstance].previewOverlayView) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [WincareFakeCamManager sharedInstance].previewOverlayView.frame = bounds;
+        });
+    }
 }
 %end
 
 // ==================== HOOK DATA OUTPUT ====================
-
 %hook AVCaptureVideoDataOutput
 - (void)setSampleBufferDelegate:(id<AVCaptureVideoDataOutputSampleBufferDelegate>)del queue:(dispatch_queue_t)q {
     if (del) {
@@ -287,14 +246,12 @@ picker.allowsEditing = YES;
 %end
 
 // ==================== HOOK CHỤP ẢNH TĨNH ====================
-
 %hook AVCapturePhoto
 - (NSData *)fileDataRepresentation {
     UIImage *fake = [WincareFakeCamManager sharedInstance].selectedImage;
     if (fake) return UIImageJPEGRepresentation(fake, 0.9);
     return %orig;
 }
-
 - (CGImageRef)CGImageRepresentation {
     UIImage *fake = [WincareFakeCamManager sharedInstance].selectedImage;
     if (fake) return fake.CGImage;
@@ -304,11 +261,7 @@ picker.allowsEditing = YES;
 
 %hook AVCaptureStillImageOutput
 - (void)captureStillImageAsynchronouslyFromConnection:(id)conn completionHandler:(void (^)(CMSampleBufferRef, NSError *))h {
-    if (!h) { 
-        %orig; 
-        return; 
-    }
-    
+    if (!h) { %orig; return; }
     void (^customH)(CMSampleBufferRef, NSError *) = ^(CMSampleBufferRef sBuf, NSError *err) {
         CMSampleBufferRef fake = [[WincareFakeCamManager sharedInstance] createFakeBuffer];
         if (fake) {
